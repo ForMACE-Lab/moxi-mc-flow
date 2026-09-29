@@ -80,6 +80,28 @@ def resolve_next_vars(
         t.replace(primed_var)
 
 
+def next_state_defines(vmt_program: vmt.Program, context: moxi.Context) -> set[str]:
+    """Names of the defines whose body refers, possibly through other defines, to a
+    next-state variable."""
+    refs = {
+        sym: {
+            t.symbol
+            for t in moxi.postorder(trm, context)
+            if isinstance(t, moxi.Variable)
+        }
+        for sym, (_, trm) in vmt_program.funs.items()
+    }
+    result = {sym for sym, syms in refs.items() if syms & vmt_program.prev.keys()}
+    changed = True
+    while changed:
+        changed = False
+        for sym, syms in refs.items():
+            if sym not in result and syms & result:
+                result.add(sym)
+                changed = True
+    return result
+
+
 def translate(
     vmt_program: vmt.Program, with_lets: bool = False
 ) -> Optional[moxi.Program]:
@@ -102,10 +124,24 @@ def translate(
         moxi_init_term = defines_to_lets(moxi_init_term, context, vmt_program)
     moxi.remove_term_attrs(moxi_init_term, context)
 
+    # Defines whose body mentions a next-state variable, directly or through
+    # another define, relate two states; their defining equality belongs in
+    # :trans, since :inv may not contain primed variables.
+    next_defines = next_state_defines(vmt_program, context)
+    define_eqs = {
+        sym: moxi.Apply.Eq([moxi.Variable(srt, sym, False), trm])
+        for sym, (srt, trm) in vmt_program.funs.items()
+    }
+
     # Trans term
-    moxi_trans_term = moxi.conjoin_list(vmt_program.trans_terms)
     if with_lets:
+        moxi_trans_term = moxi.conjoin_list(vmt_program.trans_terms)
         moxi_trans_term = defines_to_lets(moxi_trans_term, context, vmt_program)
+    else:
+        moxi_trans_term = moxi.conjoin_list(
+            vmt_program.trans_terms
+            + [eq for sym, eq in define_eqs.items() if sym in next_defines]
+        )
     resolve_next_vars(moxi_trans_term, context, vmt_program.prev)
     moxi.remove_term_attrs(moxi_trans_term, context)
 
@@ -114,10 +150,7 @@ def translate(
         moxi_inv_term = moxi.Constant.Bool(True)
     else:
         moxi_inv_term = moxi.conjoin_list(
-            [
-                moxi.Apply.Eq([moxi.Variable(srt, sym, False), trm])
-                for sym, (srt, trm) in vmt_program.funs.items()
-            ]
+            [eq for sym, eq in define_eqs.items() if sym not in next_defines]
         )
         resolve_next_vars(moxi_inv_term, context, vmt_program.prev)
         moxi.remove_term_attrs(moxi_inv_term, context)
