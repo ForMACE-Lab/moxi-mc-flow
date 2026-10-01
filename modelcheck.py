@@ -115,9 +115,9 @@ def run_avr(avr_path: pathlib.Path, btor_path: pathlib.Path, timeout: int, kmax:
 
     stderr = proc.stderr.decode("utf-8")
 
-    # AVR (fork nianzelee/avr, commit 82af52ef) reports the verdict as a
-    # "Verification result: avr-{h,v,err}" line on stderr; result.pr holds the
-    # finer-grained code and is only the fallback if that line is missing.
+    # The fork nianzelee/avr reports the verdict as a "Verification result:
+    # avr-{h,v,err}" line on stderr. Upstream AVR does not print that line, so
+    # the verdict is then read from result.pr, which holds the finer-grained code.
     result_str = ""
     for line in reversed(stderr.splitlines()):
         if line.startswith("Verification result: "):
@@ -149,7 +149,8 @@ def run_avr(avr_path: pathlib.Path, btor_path: pathlib.Path, timeout: int, kmax:
         btor_witness_path.touch()
         return 1
     elif engine in ("bmc", "kind") and f"safe till step {kmax})" in stderr:
-        # Heuristic, verified against nianzelee/avr commit 82af52ef: AVR writes
+        # Heuristic, verified against upstream AVR (hwmcc25, commit b760f28)
+        # and the fork nianzelee/avr (commit 82af52ef): AVR writes
         # the same "avr-err" (result.pr: "avr-f_err") both for a real failure
         # and for BMC or k-induction stopping at --kmax without a verdict, so
         # the verdict alone cannot separate "unknown" from a tool error. The
