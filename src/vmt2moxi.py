@@ -80,8 +80,32 @@ def resolve_next_vars(
         t.replace(primed_var)
 
 
+def add_stuttering(
+    trans: moxi.Term, state_vars: list[tuple[str, moxi.Sort]]
+) -> moxi.Term:
+    """Returns `trans` extended by a stuttering step that keeps the value of each variable in
+    `state_vars`, so that every state has a successor.
+
+    MoXI expects systems to be deadlock-free, and the n-satisfiability of a query requires the
+    state where its reachability conditions hold to have a successor. A VMT model may have states
+    without a successor, e.g., the error location of a program that aborts after reaching an
+    error, which a query would then never find. A stuttering step reaches no new values of the
+    state variables, and the inputs are unconstrained in any step, so an invariant property is
+    violated in the same states as before.
+
+    (trans) ===> (or trans (and (= v1' v1) ... (= vn' vn)))
+    """
+    stutter = moxi.conjoin_list(
+        [
+            moxi.Apply.Eq([moxi.Variable(srt, sym, True), moxi.Variable(srt, sym, False)])
+            for sym, srt in state_vars
+        ]
+    )
+    return moxi.Apply.Or([trans, stutter])
+
+
 def translate(
-    vmt_program: vmt.Program, with_lets: bool = False
+    vmt_program: vmt.Program, with_lets: bool = False, stutter: bool = False
 ) -> Optional[moxi.Program]:
     input_vars = [
         (v, s)
@@ -108,6 +132,14 @@ def translate(
         moxi_trans_term = defines_to_lets(moxi_trans_term, context, vmt_program)
     resolve_next_vars(moxi_trans_term, context, vmt_program.prev)
     moxi.remove_term_attrs(moxi_trans_term, context)
+    if stutter:
+        # A system that may stutter forever has fair traces that violate any live property
+        if vmt_program.live_properties:
+            log.error("Stuttering steps are unsound for live properties", FILE_NAME)
+            return None
+        # Only the outputs are state. Without lets, each define-fun is a local
+        # variable that the inv term defines from the other variables
+        moxi_trans_term = add_stuttering(moxi_trans_term, output_vars)
 
     # Inv term
     if with_lets:
@@ -170,7 +202,9 @@ def translate(
     return moxi.Program([moxi.SetLogic("ALL"), system, check])
 
 
-def translate_file(input_path: pathlib.Path, output_path: pathlib.Path, with_lets: bool) -> int:
+def translate_file(
+    input_path: pathlib.Path, output_path: pathlib.Path, with_lets: bool, stutter: bool = False
+) -> int:
     if not input_path.is_file():
         log.error(f"'{input_path}' is not a valid file.", FILE_NAME)
         return 1
@@ -185,7 +219,7 @@ def translate_file(input_path: pathlib.Path, output_path: pathlib.Path, with_let
         log.error("Failed parsing", FILE_NAME)
         return 1
 
-    moxi_program = translate(program, with_lets)
+    moxi_program = translate(program, with_lets, stutter)
 
     if not moxi_program:
         log.error("Failed translation", FILE_NAME)

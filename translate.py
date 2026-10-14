@@ -65,6 +65,7 @@ def main(
     do_ppjson: bool,
     logic: Optional[str],
     with_lets: bool,
+    add_stutter: bool,
     int_width: int,
     overwrite: bool,
 ) -> int:
@@ -131,7 +132,7 @@ def main(
                 with open(str(keep), "w") as f:
                     f.write(str(moxi_program))
         case (".vmt", "moxi"):
-            if vmt2moxi.translate_file(input_path, output_path, with_lets):
+            if vmt2moxi.translate_file(input_path, output_path, with_lets, add_stutter):
                 return FAIL
         case (".vmt", "btor2"):
             vmt_program = parse_vmt.parse(input_path)
@@ -139,7 +140,7 @@ def main(
                 log.error(f"Failed parsing specification in {input_path}", FILE_NAME)
                 return 1
 
-            moxi_program = vmt2moxi.translate(vmt_program, with_lets)
+            moxi_program = vmt2moxi.translate(vmt_program, with_lets, add_stutter)
             if not moxi_program:
                 log.error(
                     f"Failed translating specification in {input_path}", FILE_NAME
@@ -239,6 +240,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--logic", help="logic to set MoXI output to, by default this is inferred")
     parser.add_argument("--with-lets", action="store_true", help="uses lt bindings instead of local vars for translations from vmt to moxi")
+    parser.add_argument(
+        "--add-stutter",
+        action="store_true",
+        help="adds a stuttering step to the transition relation for translations from vmt, so that "
+        "every state has a successor as MoXI requires; not for models with live properties",
+    )
     parser.add_argument("--quiet", action="store_true", help="disable output")
     parser.add_argument(
         "--profile", action="store_true", help="runs using cProfile if true"
@@ -310,6 +317,7 @@ if __name__ == "__main__":
             args.ppjson,
             args.logic,
             args.with_lets,
+            args.add_stutter,
             args.intwidth,
             args.overwrite
         )

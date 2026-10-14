@@ -44,6 +44,21 @@
             ]
         },
         {
+            "options": ["--with-lets", "--add-stutter"],
+            "input": "vmt/fib_bench_safe_v1.vmt",
+            "output": "vmt/fib_bench_safe_v1.stutter.moxi",
+            "expected_output": [
+                ["vmt/fib_bench_safe_v1.stutter.moxi.expect",
+                 "vmt/fib_bench_safe_v1.stutter.moxi"]
+            ]
+        },
+        {
+            "options": ["--add-stutter"],
+            "input": "vmt/toggle_live.vmt",
+            "output": "vmt/toggle_live.moxi",
+            "expected_returncode": 1
+        },
+        {
             "input": "vmt/rajamani_1.c.vmt",
             "output": "vmt/rajamani_1.c.moxi",
             "expected_output": [

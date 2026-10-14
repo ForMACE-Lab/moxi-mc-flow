@@ -1,0 +1,8 @@
+; A toggling bit with the live property FG x, which is violated. Stuttering
+; steps are unsound for live properties, so --add-stutter rejects this model.
+(declare-fun x () Bool)
+(declare-fun x.next () Bool)
+(define-fun sv.x () Bool (! x :next x.next))
+(define-fun init () Bool (! (not x) :init true))
+(define-fun trans () Bool (! (= x.next (not x)) :trans true))
+(define-fun live () Bool (! x :live-property 0))
